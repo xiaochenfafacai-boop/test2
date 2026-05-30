@@ -531,13 +531,26 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         else: status_text = "⚠️ <b>特权状态：</b> 您当前尚未开通多群包月VIP资格，请点击充值续费。"
         await query.message.reply_text(status_text, parse_mode="HTML")
     elif query.data == "menu_add_master":
-        if not (is_master(uid) or is_vip_user(uid)):
-            await query.message.reply_text("❌ 抱歉，您当前还没有购买本机器人，无权添加新的机器人主人。")
-            return
-        context.user_data['waiting_for_master_id'] = True
-        await query.message.reply_text("📝 <b>请输入您想添加的【新机器人主人】的 UID（纯数字）：</b>", parse_mode="HTML")
-    elif query.data == "menu_help":
-        await query.message.reply_text(get_help_text('chinese'), parse_mode="Markdown")
+    if not (is_master(uid) or is_vip_user(uid)):
+        await query.message.reply_text("❌ 抱歉，您当前还没有购买机器人，无权添加新的机器人主人。")
+        return
+    
+    context.user_data['waiting_for_master_id'] = True
+    
+    # 将教程拼接到一整个字符串中
+    guide_text = (
+        "📝 <b>请输入您想添加的【新机器人主人】的 UID（纯数字）：</b>\n"
+        "--------------------------------------------\n"
+        "❓ <b>如何获取 Telegram 用户唯一 UID？</b>\n"
+        "为了保证机器人主人的唯一安全性，系统采用不可更改的数字 UID 进行绑定。请通过以下方式获取：\n\n"
+        "🌟 <b>最快获取方式：</b>\n"
+        "1️⃣ 在 Telegram 搜索栏输入： @userinfobot 或 @username_to_id_bot\n"
+        "2️⃣ 点击进入机器人，发送任意消息或点击 <code>/start</code>。\n"
+        "3️⃣ 机器人会立即回复一串数字（例如：<code>8782394486</code>），这串数字就是 UID。\n\n"
+        "👉 请获取到 UID 数字后，直接在下方输入发送给本机器人！"
+    )
+    
+    await query.message.reply_text(guide_text, parse_mode="HTML")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
