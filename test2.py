@@ -14,8 +14,8 @@ import os
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # ==================== 核心配置 ====================
-TOKEN = "8968642261:AAGjEsEDLyV1gbC6SzNjsoin4grn7nKc6oU"
-WEB_URL = "https://sellb-7ttgh.onrender.com"
+TOKEN = "8912954548:AAG-1rZVUabLEv9AOfJRQxGVax4ZiXWtC8g"
+WEB_URL = "https://sellb-6ugh.onrender.com"
 PORT = int(os.environ.get('PORT', 8080))
 
 # 创始超级管理员账户ID（接收买家审核通知和开通按钮）
@@ -63,7 +63,7 @@ def get_current_time(timezone_str):
         now = datetime.now(tz)
         return now, now.strftime("%H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")
 
-# ========== 权限判定引擎 ==========
+# ========== 权限判定引擎 (含最多3名主人限制) ==========
 def get_all_masters():
     masters = list(FOUNDER_USERS)
     try:
@@ -80,6 +80,18 @@ def get_all_masters():
 def is_master(user_id):
     return user_id in get_all_masters()
 
+def get_dynamic_masters_count():
+    """获取当前已绑定的新主人数量（不含创始超级管理员）"""
+    try:
+        conn = sqlite3.connect('bot_data.db')
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM dynamic_masters")
+        count = c.fetchone()[0]
+        conn.close()
+        return count
+    except:
+        return 0
+
 def is_vip_user(user_id):
     if is_master(user_id): return True
     conn = sqlite3.connect('bot_data.db')
@@ -95,7 +107,6 @@ def is_vip_user(user_id):
     return False
 
 def can_use(group_id, user_id):
-    # 创始人、包月VIP买家 或 该群内的操作员拥有权限
     if is_master(user_id) or is_vip_user(user_id): return True
     ops = json.loads(get_setting(group_id, 'operators') or '[]')
     return user_id in ops
@@ -366,7 +377,7 @@ def get_help_text(lang):
 `设置汇率 7.2` - 设置当前常规汇率
 `设置操作人` - 授权群成员协助记账 (回复他人消息发送)
 `查看操作员列表` - 查看本群操作人
-`改语言` - 切换群内系统语言（中文/缅甸语）
+`改语言` - 切换群内 system 语言（中文/缅甸语）
 `设置时间 china/myanmar` - 调整本群结算时区
 
 📌 *删除命令：*
@@ -531,26 +542,32 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         else: status_text = "⚠️ <b>特权状态：</b> 您当前尚未开通多群包月VIP资格，请点击充值续费。"
         await query.message.reply_text(status_text, parse_mode="HTML")
     elif query.data == "menu_add_master":
-    if not (is_master(uid) or is_vip_user(uid)):
-        await query.message.reply_text("❌ 抱歉，您当前还没有购买机器人，无权添加新的机器人主人。")
-        return
-    
-    context.user_data['waiting_for_master_id'] = True
-    
-    # 将教程拼接到一整个字符串中
-    guide_text = (
-        "📝 <b>请输入您想添加的【新机器人主人】的 UID（纯数字）：</b>\n"
-        "--------------------------------------------\n"
-        "❓ <b>如何获取 Telegram 用户唯一 UID？</b>\n"
-        "为了保证机器人主人的唯一安全性，系统采用不可更改的数字 UID 进行绑定。请通过以下方式获取：\n\n"
-        "🌟 <b>最快获取方式：</b>\n"
-        "1️⃣ 在 Telegram 搜索栏输入： @userinfobot 或 @username_to_id_bot\n"
-        "2️⃣ 点击进入机器人，发送任意消息或点击 <code>/start</code>。\n"
-        "3️⃣ 机器人会立即回复一串数字（例如：<code>8782394486</code>），这串数字就是 UID。\n\n"
-        "👉 请获取到 UID 数字后，直接在下方输入发送给本机器人！"
-    )
-    
-    await query.message.reply_text(guide_text, parse_mode="HTML")
+        if not (is_master(uid) or is_vip_user(uid)):
+            await query.message.reply_text("❌ 抱歉，您当前还没有购买本机器人，无权添加新的机器人主人。")
+            return
+        
+        # 📌 商业安全限制：检查当前被授权的副主人是否已满 3 个
+        if get_dynamic_masters_count() >= 3:
+            await query.message.reply_text("⚠️ <b>系统提示：授权失败</b>\n为了系统分销环境的高安全性，本机器人系统当前<b>最多只能添加 3 个机器人主人</b>账号。\n\n如需更改，请联系首席创始人手动调控数据库！", parse_mode="HTML")
+            return
+
+        context.user_data['waiting_for_master_id'] = True
+        
+        # 📢 动态优化组合：将买家领取 UID 的高级方法拼接下发
+        guide_text = (
+            "📝 <b>请输入您想添加的【新机器人主人】的 UID（纯数字）：</b>\n"
+            "--------------------------------------------\n"
+            "❓ <b>如何获取 Telegram 用户唯一 UID？</b>\n"
+            "为了保证机器人主人的唯一安全性，系统采用不可更改的数字 UID 进行绑定。请通过以下方式获取：\n\n"
+            "🌟 <b>最快获取方式：</b>\n"
+            "1️⃣ 在 Telegram 搜索栏输入： @userinfobot 或 @username_to_id_bot\n"
+            "2️⃣ 点击进入该官方机器人，发送任意消息或点击 <code>/start</code>。\n"
+            "3️⃣ 对方机器人会立即回复一串数字（例如：<code>8782394486</code>），这串数字就是您的 UID。\n\n"
+            "👉 请获取到 UID 数字后，直接在下方输入发送给本机器人！"
+        )
+        await query.message.reply_text(guide_text, parse_mode="HTML")
+    elif query.data == "menu_help":
+        await query.message.reply_text(get_help_text('chinese'), parse_mode="Markdown")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
@@ -563,6 +580,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if chat_type == "private":
         if context.user_data.get('waiting_for_master_id'):
             context.user_data['waiting_for_master_id'] = False
+            
+            # 再一次进行双重拦截防御检查，防止文本输入过快绕过按钮检测
+            if get_dynamic_masters_count() >= 3:
+                await update.message.reply_text("⚠️ <b>系统提示：</b> 主人坑位已满（上限 3 个），无法继续写入授权。", parse_mode="HTML")
+                return
+
             clean_uid = "".join(filter(str.isdigit, text))
             if clean_uid and len(clean_uid) >= 5:
                 target_master_id = int(clean_uid)
@@ -591,7 +614,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # ==================== 群组多语言专业记账逻辑 ====================
-    # 核心安全控制：只有获得多群VIP授权的用户才能在任意群内操作此机器人
     if text in ['上课', 'အတန်းစ']:
         if not can_use(gid, uid): return
         update_setting(gid, 'is_active', 1)
@@ -704,7 +726,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await show_full_bill(update, gid)
         return
 
-    # 下发处理：支持备注下发
     m_exp = re.match(r'^(.*?)(?:下发|ထုတ်)\s*(-?\d+(?:\.\d+)?)$', text)
     if m_exp:
         rem = m_exp.group(1).strip()
@@ -713,7 +734,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await show_full_bill(update, gid)
         return
 
-    # 普通+ / -入款扣款处理
     m_inc = re.match(r'^(.*?)([\+\-])(\d+(?:\.\d+)?)(?:/(\d+(?:\.\d+)?))?$', text)
     if m_inc:
         rem = m_inc.group(1).strip()
